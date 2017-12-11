@@ -7,6 +7,8 @@ Bittrex API Version: v1.1
 API Documentation: https://bittrex.com/Home/Api
 
 ##TODO
-- Authentication
+- Documentation
 - Market API
 - Account API
+- Error handling
+- Use time datatype instead of strings 

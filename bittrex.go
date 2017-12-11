@@ -10,6 +10,7 @@ import (
 	"time"
 	"crypto/hmac"
 	"crypto/sha512"
+	"strings"
 )
 
 const (
@@ -42,18 +43,24 @@ var functionType = map[string]uint8{
 
 var ApiKey string
 var ApiSecret string
-var nonce time.Time
 
-func apiQuery(method string, params *map[string]string) (apiResp APIResponse, err error) {
-	var queryURL = generateQueryURL(&method, params)
+var client = http.Client{
+	Timeout: time.Second * 30,
+}
 
-	response, err := http.Get(queryURL)
+func apiQuery(function string, httpMethod string, params *map[string]string) (apiResp APIResponse, err error) {
+	req, err := generateRequest(&function, &httpMethod, params)
 	if err != nil {
-		fmt.Printf("Request error: %s\n", err)
 		return
 	}
 
-	data, err := ioutil.ReadAll(response.Body)
+	fmt.Println("API Call: ", req.URL.String())
+	res, err := client.Do(req)
+	if err != nil {
+		return
+	}
+
+	data, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return
 	}
@@ -65,86 +72,99 @@ func apiQuery(method string, params *map[string]string) (apiResp APIResponse, er
 	return
 }
 
-func generateQueryURL(method *string, params *map[string]string) (queryURL string) {
-	queryURL = ApiURL + APIVersion
+func generateRequest(function *string, httpMethod *string, params *map[string]string) (client *http.Request, err error) {
+	reqURL := ApiURL + APIVersion
 	var authNeeded bool
-	switch functionType[*method] {
+
+	switch functionType[*function] {
 	case 0:
-		queryURL += "/public/"
+		reqURL += "/public/"
 	case 1:
-		queryURL += "/market/"
+		reqURL += "/market/"
 		authNeeded = true
 	case 2:
-		queryURL += "/account/"
+		reqURL += "/account/"
 		authNeeded = true
 	}
-	queryURL += *method
+	reqURL += *function
+
+	req, err := http.NewRequest(*httpMethod, reqURL, nil)
+	if err != nil {
+		return
+	}
+
+	req.Header.Add("Accept", "application/json")
+	q := req.URL.Query()
 
 	if params != nil && len(*params) > 0 {
-		queryURL += "?"
 		for key, value := range *params {
-			queryURL += key + "=" + value + "&"
+			q.Set(key, value)
 		}
 	}
 
 	if authNeeded {
-		// TODO: Authentication
 		nonce := time.Now().UnixNano()
-		queryURL += "apikey=" + ApiKey + "&nonce=" + string(nonce)
-		sign := hmac.New(sha512.New, []byte(ApiSecret))
-		_, err := sign.Write([]byte(queryURL))
+		q.Set("apikey", ApiKey)
+		q.Set("nonce", string(nonce))
+
+		sign, err := generateAPISign(req.URL.String())
 		if err != nil {
-			return // TODO: Add Error handling
+			return nil, err
 		}
-	} else {
-		queryURL = queryURL[:len(queryURL)-1]
+		req.Header.Add("apisign", sign)
 	}
 
-	fmt.Println("Calling: ", queryURL)
-	return
+	req.URL.RawQuery = q.Encode()
+	return req, err
+}
+
+func generateAPISign(url string) (sign string, err error) {
+	mac := hmac.New(sha512.New, []byte(ApiSecret))
+	_, err = mac.Write([]byte(url))
+	return string(mac.Sum(nil)), err
 }
 
 // *** Public APIs ***
 // Following functions are callable without authentication
 
 func GetMarkets() (markets []Market, err error) {
-	apiResp, err := apiQuery("getmarkets", nil)
+	apiResp, err := apiQuery("getmarkets", "GET", nil)
 	err = json.Unmarshal(apiResp.Result, &markets)
 	return
 }
 
 func GetCurrencies() (currencies []Currency, err error) {
-	apiResp, err := apiQuery("getcurrencies", nil)
+	apiResp, err := apiQuery("getcurrencies", "GET", nil)
 	err = json.Unmarshal(apiResp.Result, &currencies)
 	return
 }
 
 func GetTicker(market string) (ticker Ticker, err error) {
-	apiResp, err := apiQuery("getticker", &map[string]string{"market": market})
+	apiResp, err := apiQuery("getticker", "GET", &map[string]string{"market": strings.ToUpper(market)})
 	err = json.Unmarshal(apiResp.Result, &ticker)
 	return
 }
 
 func GetMarketSummaries() (marketSummaries []MarketSummary, err error) {
-	apiResp, err := apiQuery("getmarketsummaries", nil)
+	apiResp, err := apiQuery("getmarketsummaries", "GET", nil)
 	err = json.Unmarshal(apiResp.Result, &marketSummaries)
 	return
 }
 
-func GetMarketSummary(market string) (marketSummary MarketSummary, err error) {
-	apiResp, err := apiQuery("getmarketsummary", &map[string]string{"market": market})
+func GetMarketSummary(market string) (marketSummary []MarketSummary, err error) {
+	apiResp, err := apiQuery("getmarketsummary", "GET", &map[string]string{"market": strings.ToUpper(market)})
 	err = json.Unmarshal(apiResp.Result, &marketSummary)
 	return
 }
 
 func GetOrderBook(market string, otype string) (orderBook OrderBook, err error) {
-	apiResp, err := apiQuery("getorderbook", &map[string]string{"market": market, "type": otype})
+	apiResp, err := apiQuery("getorderbook", "GET", &map[string]string{"market": strings.ToUpper(market), "type": otype})
 	err = json.Unmarshal(apiResp.Result, &orderBook)
 	return
 }
 
 func GetMarketHistory(market string) (marketHistory []MarketHistoryEvent, err error) {
-	apiResp, err := apiQuery("getmarkethistory", &map[string]string{"market": market})
+	apiResp, err := apiQuery("getmarkethistory", "GET", &map[string]string{"market": strings.ToUpper(market)})
 	err = json.Unmarshal(apiResp.Result, &marketHistory)
 	return
 }

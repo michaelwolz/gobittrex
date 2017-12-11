@@ -5,12 +5,14 @@ import (
 	"fmt"
 )
 
+// *** Public APIs ***
+
 func TestGetMarkets(t *testing.T) {
 	markets, err := GetMarkets()
 	if err != nil {
 		t.Errorf(err.Error())
 	} else {
-		fmt.Println(markets)
+		fmt.Println(markets, "\n")
 	}
 }
 
@@ -19,7 +21,7 @@ func TestGetCurrencies(t *testing.T) {
 	if err != nil {
 		t.Errorf(err.Error())
 	} else {
-		fmt.Println(currencies)
+		fmt.Println(currencies, "\n")
 	}
 }
 
@@ -28,7 +30,7 @@ func TestGetTicker(t *testing.T) {
 	if err != nil {
 		t.Errorf(err.Error())
 	} else {
-		fmt.Println(ticker)
+		fmt.Println(ticker, "\n")
 	}
 }
 
@@ -37,7 +39,7 @@ func TestGetMarketSummaries(t *testing.T) {
 	if err != nil {
 		t.Errorf(err.Error())
 	} else {
-		fmt.Println(marketSummaries)
+		fmt.Println(marketSummaries, "\n")
 	}
 }
 
@@ -46,7 +48,7 @@ func TestGetMarketSummary(t *testing.T) {
 	if err != nil {
 		t.Errorf(err.Error())
 	} else {
-		fmt.Println(marketSummary)
+		fmt.Println(marketSummary, "\n")
 	}
 }
 
@@ -55,7 +57,7 @@ func TestGetOrderBook(t *testing.T) {
 	if err != nil {
 		t.Errorf(err.Error())
 	} else {
-		fmt.Println(orderBook)
+		fmt.Println(orderBook, "\n")
 	}
 }
 
@@ -64,6 +66,38 @@ func TestGetMarketHistory(t *testing.T) {
 	if err != nil {
 		t.Errorf(err.Error())
 	} else {
-		fmt.Println(marketHistory)
+		fmt.Println(marketHistory, "\n")
 	}
 }
+
+// *** Market APIs ***
+
+/*
+func TestBuyLimit(t *testing.T) {}
+
+func TestSellLimit(t *testing.T) {}
+
+func TestCancel(t *testing.T) {}
+
+func TestGetOpenOrders(t *testing.T) {}
+*/
+
+// *** Account APIs ***
+
+/*
+func TestGetBalances(t *testing.T) {}
+
+func TestGetBalance(t *testing.T) {}
+
+func TestGetDepositAddress(t *testing.T) {}
+
+func TestWithdraw(t *testing.T) {}
+
+func TestGetOrder(t *testing.T) {}
+
+func TestGetOrderHistory(t *testing.T) {}
+
+func TestGetWithdrawalHistory(t *testing.T) {}
+
+func TestGetDepositHistory(t *testing.T) {}
+*/
