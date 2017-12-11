@@ -61,8 +61,8 @@ type OrderBookEntry struct {
 }
 
 type OrderBook struct {
-	Buy  OrderBookEntry `json:"buy"`
-	Sell OrderBookEntry `json:"sell"`
+	Buy  []OrderBookEntry `json:"buy"`
+	Sell []OrderBookEntry `json:"sell"`
 }
 
 type MarketHistoryEvent struct {
