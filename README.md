@@ -8,7 +8,5 @@ API Documentation: https://bittrex.com/Home/Api
 
 ## TODO
 - Documentation
-- Market API
-- Account API
-- Error handling
+- Optimize error handling
 - Use time datatype instead of strings 

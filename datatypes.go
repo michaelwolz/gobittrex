@@ -162,12 +162,12 @@ type OrderHistoryEvent struct {
 	ImmediateOrCancel bool
 }
 
-type OrderUUID struct {
-	Uuid string
-}
-
 type Ticker struct {
 	Bid  decimal.Decimal
 	Ask  decimal.Decimal
 	Last decimal.Decimal
+}
+
+type UUID struct {
+	Uuid string
 }

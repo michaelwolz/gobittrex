@@ -6,11 +6,11 @@ import (
 	"io/ioutil"
 	"encoding/json"
 	"errors"
-	"github.com/shopspring/decimal"
 	"time"
 	"crypto/hmac"
 	"crypto/sha512"
 	"strings"
+	"encoding/hex"
 )
 
 const (
@@ -27,18 +27,18 @@ var functionType = map[string]uint8{
 	"getmarketsummary":     0,
 	"getorderbook":         0,
 	"getmarkethistory":     0,
-	"BuyLimit":             1,
-	"SellLimit":            1,
-	"Cancel":               1,
-	"GetOpenOrders":        1,
-	"GetBalances":          2,
-	"GetBalance":           2,
-	"GetDepositAddress":    2,
-	"Withdraw":             2,
-	"GetOrder":             2,
-	"GetOrderHistory":      2,
-	"GetWithdrawalHistory": 2,
-	"GetDepositHistory":    2,
+	"buylimit":             1,
+	"selllimit":            1,
+	"cancel":               1,
+	"getopenorders":        1,
+	"getbalances":          2,
+	"getbalance":           2,
+	"getdepositaddress":    2,
+	"withdraw":             2,
+	"getorder":             2,
+	"getorderhistory":      2,
+	"getwithdrawalhistory": 2,
+	"getdeposithistory":    2,
 }
 
 var ApiKey string
@@ -67,7 +67,7 @@ func apiQuery(function string, httpMethod string, params *map[string]string) (ap
 
 	err = json.Unmarshal(data, &apiResp)
 	if !apiResp.Success {
-		err = errors.New(apiResp.Message)
+		err = errors.New(fmt.Sprintf("API-Call-Error: %s", apiResp.Message))
 	}
 	return
 }
@@ -96,16 +96,19 @@ func generateRequest(function *string, httpMethod *string, params *map[string]st
 	req.Header.Add("Accept", "application/json")
 	q := req.URL.Query()
 
-	if params != nil && len(*params) > 0 {
+	if params != nil {
 		for key, value := range *params {
 			q.Set(key, value)
 		}
 	}
 
+	req.URL.RawQuery = q.Encode()
+
 	if authNeeded {
 		nonce := time.Now().UnixNano()
 		q.Set("apikey", ApiKey)
-		q.Set("nonce", string(nonce))
+		q.Set("nonce", fmt.Sprintf("%d", nonce))
+		req.URL.RawQuery = q.Encode()
 
 		sign, err := generateAPISign(req.URL.String())
 		if err != nil {
@@ -113,15 +116,13 @@ func generateRequest(function *string, httpMethod *string, params *map[string]st
 		}
 		req.Header.Add("apisign", sign)
 	}
-
-	req.URL.RawQuery = q.Encode()
 	return req, err
 }
 
 func generateAPISign(url string) (sign string, err error) {
 	mac := hmac.New(sha512.New, []byte(ApiSecret))
 	_, err = mac.Write([]byte(url))
-	return string(mac.Sum(nil)), err
+	return hex.EncodeToString(mac.Sum(nil)), err
 }
 
 // *** Public APIs ***
@@ -129,42 +130,70 @@ func generateAPISign(url string) (sign string, err error) {
 
 func GetMarkets() (markets []Market, err error) {
 	apiResp, err := apiQuery("getmarkets", "GET", nil)
+	if err != nil {
+		return
+	}
+
 	err = json.Unmarshal(apiResp.Result, &markets)
 	return
 }
 
 func GetCurrencies() (currencies []Currency, err error) {
 	apiResp, err := apiQuery("getcurrencies", "GET", nil)
+	if err != nil {
+		return
+	}
+
 	err = json.Unmarshal(apiResp.Result, &currencies)
 	return
 }
 
 func GetTicker(market string) (ticker Ticker, err error) {
 	apiResp, err := apiQuery("getticker", "GET", &map[string]string{"market": strings.ToUpper(market)})
+	if err != nil {
+		return
+	}
+
 	err = json.Unmarshal(apiResp.Result, &ticker)
 	return
 }
 
 func GetMarketSummaries() (marketSummaries []MarketSummary, err error) {
 	apiResp, err := apiQuery("getmarketsummaries", "GET", nil)
+	if err != nil {
+		return
+	}
+
 	err = json.Unmarshal(apiResp.Result, &marketSummaries)
 	return
 }
 
 func GetMarketSummary(market string) (marketSummary []MarketSummary, err error) {
 	apiResp, err := apiQuery("getmarketsummary", "GET", &map[string]string{"market": strings.ToUpper(market)})
+	if err != nil {
+		return
+	}
+
 	err = json.Unmarshal(apiResp.Result, &marketSummary)
 	return
 }
 
 func GetOrderBook(market string, otype string) (orderBook OrderBook, err error) {
 	apiResp, err := apiQuery("getorderbook", "GET", &map[string]string{"market": strings.ToUpper(market), "type": otype})
+	if err != nil {
+		return
+	}
+
 	err = json.Unmarshal(apiResp.Result, &orderBook)
 	return
 }
 
 func GetMarketHistory(market string) (marketHistory []MarketHistoryEvent, err error) {
 	apiResp, err := apiQuery("getmarkethistory", "GET", &map[string]string{"market": strings.ToUpper(market)})
+	if err != nil {
+		return
+	}
+
 	err = json.Unmarshal(apiResp.Result, &marketHistory)
 	return
 }
@@ -172,29 +201,138 @@ func GetMarketHistory(market string) (marketHistory []MarketHistoryEvent, err er
 // *** Market APIs ***
 // Following functions are only callable with authentication
 
-func BuyLimit() {}
+// While orderType is sell or buy
+func LimitOrder(orderType, market, quantity, rate string) (orderUuid string, err error) {
+	params := map[string]string{
+		"market":   strings.ToUpper(market),
+		"quantity": fmt.Sprintf("%s", quantity),
+		"rate":     fmt.Sprintf("%s", rate),
+	}
 
-func SellLimit() {}
+	if orderType != "buy" && orderType != "sell" {
+		err = errors.New(fmt.Sprintf("There is no ordertype: %s", orderType))
+	}
 
-func Cancel() {}
+	apiResp, err := apiQuery(fmt.Sprintf("%slimit", orderType), "GET", &params)
 
-func GetOpenOrders() {}
+	if err != nil {
+		return
+	}
+
+	var uuid UUID
+	err = json.Unmarshal(apiResp.Result, &uuid)
+
+	return uuid.Uuid, err
+}
+
+func Cancel(uuid string) (err error) {
+	_, err = apiQuery("cancel", "GET", &map[string]string{"uuid": uuid})
+	return
+}
+
+func GetOpenOrders(market string) (openOrders []OpenOrder, err error) {
+	var params map[string]string
+	if market != "" {
+		params = make(map[string]string, 1)
+		params["market"] = market
+
+	}
+
+	apiResp, err := apiQuery("getopenorders", "GET", &params)
+	if err != nil {
+		return
+	}
+
+	err = json.Unmarshal(apiResp.Result, &openOrders)
+	return
+}
 
 // *** Account APIs ***
 // Following functions are only callable with authentication
 
-func GetBalances() {}
+func GetBalances() (balances []Balance, err error) {
+	apiResp, err := apiQuery("getbalances", "GET", nil)
+	if err != nil {
+		return
+	}
 
-func GetBalance(currency string) {}
+	err = json.Unmarshal(apiResp.Result, &balances)
+	return
+}
 
-func GetDepositAddress(currency string) {}
+func GetBalance(currency string) (balance Balance, err error) {
+	apiResp, err := apiQuery("getbalance", "GET", &map[string]string{"currency": strings.ToUpper(currency)})
+	if err != nil {
+		return
+	}
 
-func Withdraw(currency string, quantity decimal.Decimal, address string) {}
+	err = json.Unmarshal(apiResp.Result, &balance)
+	return
+}
 
-func GetOrder(uuid string) {}
+func GetDepositAddress(currency string) (depositAddress DepositAddress, err error) {
+	apiResp, err := apiQuery("getdepositaddress", "GET", &map[string]string{"currency": strings.ToUpper(currency)})
+	if err != nil {
+		return
+	}
 
-func GetOrderHistory(market string) {}
+	err = json.Unmarshal(apiResp.Result, &depositAddress)
+	return
+}
 
-func GetWithdrawalHistory(currency string) {}
+func Withdraw(currency string, quantity string, address string) (withdrawalUUID string, err error) {
+	params := map[string]string{
+		"currency": currency,
+		"quantity": quantity,
+		"address":  address,
+	}
 
-func GetDepositHistory(curreny string) {}
+	apiResp, err := apiQuery("getbalances", "GET", &params)
+	if err != nil {
+		return
+	}
+
+	var uuid UUID
+	err = json.Unmarshal(apiResp.Result, &uuid)
+	return uuid.Uuid, err
+}
+
+func GetOrder(uuid string) (order Order, err error) {
+	apiResp, err := apiQuery("getorder", "GET", &map[string]string{"uuid": uuid})
+	if err != nil {
+		return
+	}
+
+	err = json.Unmarshal(apiResp.Result, &order)
+	return
+}
+
+func GetOrderHistory(market string) (orderHistory []OrderHistoryEvent, err error) {
+	apiResp, err := apiQuery("getorderhistory", "GET", &map[string]string{"market": strings.ToUpper(market)})
+	if err != nil {
+		return
+	}
+
+	err = json.Unmarshal(apiResp.Result, &orderHistory)
+	return
+}
+
+func GetWithdrawalHistory(currency string) (withdrawalHistory []DWHistoryEvent, err error) {
+	apiResp, err := apiQuery("getwithdrawalhistory", "GET", &map[string]string{"currency": strings.ToUpper(currency)})
+	if err != nil {
+		return
+	}
+
+	err = json.Unmarshal(apiResp.Result, &withdrawalHistory)
+	return
+}
+
+func GetDepositHistory(currency string) (depositHistory []DWHistoryEvent, err error) {
+	apiResp, err := apiQuery("getdeposithistory", "GET", &map[string]string{"currency": strings.ToUpper(currency)})
+	if err != nil {
+		return
+	}
+
+	err = json.Unmarshal(apiResp.Result, &depositHistory)
+	return
+}
